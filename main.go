@@ -31,6 +31,7 @@ const (
 	TOKEN_QUOTATION
 	TOKEN_FLOAT
 	TOKEN_FLOAT_KEYWORD
+	TOKEN_INPUT_KEYWORD
 )
 
 func main() {
@@ -81,10 +82,23 @@ func (l *Lexer) NextToken() Token {
 
 	if unicode.IsDigit(rune(l.InputString[l.CurrentPos])) {
 		start := l.CurrentPos
-		for l.CurrentPos < len(l.InputString) && unicode.IsDigit(rune(l.InputString[l.CurrentPos])) {
+		hasDecimal := false
+		for l.CurrentPos < len(l.InputString) && (unicode.IsDigit(rune(l.InputString[l.CurrentPos])) || l.InputString[l.CurrentPos] == '.') {
+			if l.InputString[l.CurrentPos] == '.' {
+				if hasDecimal {
+					break
+				}
+				hasDecimal = true
+			}
 			l.CurrentPos++
+
 		}
-		return Token{TOKEN_INT, l.InputString[start:l.CurrentPos]}
+		value := l.InputString[start:l.CurrentPos]
+		if hasDecimal {
+			return Token{TOKEN_FLOAT, value}
+		}
+
+		return Token{TOKEN_INT, value}
 	}
 
 	if unicode.IsLetter(rune(l.InputString[l.CurrentPos])) {
@@ -109,6 +123,9 @@ func (l *Lexer) NextToken() Token {
 
 		if value == "string" {
 			return Token{TOKEN_STRING_KEYWORD, value}
+		}
+		if value == "input" {
+			return Token{TOKEN_INPUT_KEYWORD, value}
 		}
 		return Token{TOKEN_IDENT, value}
 	}
@@ -150,7 +167,6 @@ func (l *Lexer) NextToken() Token {
 	case '%':
 		return Token{TOKEN_MODULO, "%"}
 	case ' ':
-		fmt.Println("найден пробел")
 		return Token{TOKEN_SPACE, " "}
 
 	}
@@ -172,6 +188,7 @@ func NewParser(lexer *Lexer) *Parser {
 
 func (p *Parser) expect(t TOKEN_TYPE) Token {
 	if p.CurrentToken.Type != t {
+		fmt.Println()
 		panic(fmt.Sprintf("ошибка: токены не совпадают( %v(have) != %v(want))", p.CurrentToken.Type, t))
 	}
 	token := p.CurrentToken
@@ -199,6 +216,10 @@ func (p *Parser) Parse() {
 		p.parseStr()
 	case TOKEN_IDENT:
 		p.parseReAssignVar()
+	case TOKEN_FLOAT_KEYWORD:
+		p.parseFloat()
+	case TOKEN_INPUT_KEYWORD:
+		p.parseInput()
 	default:
 		panic(fmt.Sprintf("неизвестный токен: %v", p.CurrentToken.Type))
 	}
@@ -234,7 +255,6 @@ func (p *Parser) printToken() {
 }
 
 func (p *Parser) printVar() {
-
 	if p.CurrentToken.Type == TOKEN_RPAREN {
 		p.expect(TOKEN_RPAREN)
 		p.expect(TOKEN_SEMICOLON)
@@ -244,6 +264,7 @@ func (p *Parser) printVar() {
 	}
 
 	for {
+
 		p.printArgument()
 		if p.CurrentToken.Type == TOKEN_COMMA {
 			p.expect(TOKEN_COMMA)
@@ -252,7 +273,7 @@ func (p *Parser) printVar() {
 		}
 		break
 	}
-	p.advanceParser()
+
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
 
@@ -263,7 +284,6 @@ func (p *Parser) printString() {
 	p.expect(TOKEN_QUOTATION)
 
 	for {
-		fmt.Println(p.CurrentToken)
 		p.printArgument()
 
 		if p.CurrentToken.Type == TOKEN_COMMA {
@@ -277,7 +297,6 @@ func (p *Parser) printString() {
 	p.expect(TOKEN_QUOTATION)
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
-	fmt.Println("закончил выводить строку")
 }
 
 func (p *Parser) isVar(varName string) bool {
@@ -290,7 +309,6 @@ func (p *Parser) isVar(varName string) bool {
 func (p *Parser) printArgument() {
 	switch p.CurrentToken.Type {
 	case TOKEN_STRING:
-		fmt.Println("это string")
 		token := p.expect(TOKEN_STRING)
 		fmt.Print(token.Val)
 	case TOKEN_IDENT:
@@ -299,30 +317,33 @@ func (p *Parser) printArgument() {
 		}
 		val := p.Variables[p.CurrentToken.Val]
 		fmt.Print(val)
+		p.advanceParser()
 	case TOKEN_INT:
 		result := p.parseExpression()
 		fmt.Print(result)
+	case TOKEN_FLOAT:
+		result := p.parseExpression()
+		fmt.Println(result)
 	}
 }
 
 func (p *Parser) parseInt() {
 	p.expect(TOKEN_INT_KEYWORD)
-
 	ident := p.expect(TOKEN_IDENT)
 	p.expect(TOKEN_ASSIGN)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
-	p.setVar(ident.Val, strconv.Itoa(result))
+	p.setVar(ident.Val, strconv.Itoa(int(result)))
 }
 
 func (p *Parser) parseFloat() {
 	p.expect(TOKEN_FLOAT_KEYWORD)
-
 	ident := p.expect(TOKEN_IDENT)
+
 	p.expect(TOKEN_ASSIGN)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
-	p.setVar(ident.Val, strconv.Itoa(result))
+	p.setVar(ident.Val, fmt.Sprintf("%f", result))
 }
 
 func (p *Parser) parseStr() {
@@ -345,10 +366,14 @@ func ParseProgramm(parser *Parser) {
 	}
 }
 
-func (p *Parser) parseExpression() int {
+type Number interface {
+	int | float64
+}
+
+func (p *Parser) parseExpression() float64 {
 	return p.parseAddSub()
 }
-func (p *Parser) parseAddSub() int {
+func (p *Parser) parseAddSub() float64 {
 	left := p.parseMulDiv()
 
 	for p.CurrentToken.Type == TOKEN_PLUS || p.CurrentToken.Type == TOKEN_MINUS {
@@ -368,7 +393,7 @@ func (p *Parser) parseAddSub() int {
 	return left
 }
 
-func (p *Parser) parseMulDiv() int {
+func (p *Parser) parseMulDiv() float64 {
 	left := p.parsePrimary()
 
 	for p.CurrentToken.Type == TOKEN_MULTIPLY || p.CurrentToken.Type == TOKEN_DIVIDE || p.CurrentToken.Type == TOKEN_MODULO {
@@ -388,25 +413,33 @@ func (p *Parser) parseMulDiv() int {
 			if right == 0 {
 				panic("остаток от деления на 0")
 			}
-			left = left % right
+			left = float64(int(left) % int(right))
+
 		}
 	}
 	return left
 }
 
-func (p *Parser) parsePrimary() int {
+func (p *Parser) parsePrimary() float64 {
 	switch p.CurrentToken.Type {
 	case TOKEN_INT:
 		token := p.expect(TOKEN_INT)
 		val, err := strconv.Atoi(token.Val)
 		if err != nil {
-			panic(fmt.Sprintf("невалидное число: %s", token.Val))
+			panic(fmt.Sprintf("невалидное число для int: %s", token.Val))
+		}
+		return float64(val)
+	case TOKEN_FLOAT:
+		token := p.expect(TOKEN_FLOAT)
+		val, err := strconv.ParseFloat(token.Val, 64)
+		if err != nil {
+			panic(fmt.Sprintf("невалидное число для float: %s", token.Val))
 		}
 		return val
 	case TOKEN_IDENT:
 		token := p.expect(TOKEN_IDENT)
 		if val, ok := p.Variables[token.Val]; ok {
-			if valI, err := strconv.Atoi(val); err == nil {
+			if valI, err := strconv.ParseFloat(val, 64); err == nil {
 				return valI
 			}
 			panic(fmt.Sprintf("невалидное число: %s", token.Val))
@@ -417,7 +450,7 @@ func (p *Parser) parsePrimary() int {
 		p.expect(TOKEN_LPAREN)
 		result := p.parseExpression()
 		p.expect(TOKEN_RPAREN)
-		return result
+		return float64(result)
 
 	case TOKEN_MINUS:
 		p.expect(TOKEN_MINUS)
@@ -431,4 +464,22 @@ func (p *Parser) parsePrimary() int {
 		panic(fmt.Sprintf("неожиданный токен в выражении: %v", p.CurrentToken.Type))
 	}
 
+}
+
+func (p *Parser) parseInput() {
+	p.expect(TOKEN_INPUT_KEYWORD)
+	p.expect(TOKEN_LPAREN)
+
+	ident := p.expect(TOKEN_IDENT).Val
+	fmt.Println(p.CurrentToken)
+	p.expect(TOKEN_RPAREN)
+	p.expect(TOKEN_SEMICOLON)
+
+	if p.isVar(ident) {
+		var input string
+		fmt.Scan(&input)
+		p.Variables[ident] = input
+	} else {
+		panic(fmt.Sprintf("undeclared var: %v", ident))
+	}
 }

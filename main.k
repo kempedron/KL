@@ -1,8 +1,4 @@
-int b = 3;
-print(b);
-b = 2;
-print(b);
-string str = "hello world";
-print(str);
-str = "322";
-print(str);
+print("как тебя зовут?:");
+string c = "hi";
+input(c);
+print("Hello,",c);
