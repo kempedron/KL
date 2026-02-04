@@ -29,6 +29,8 @@ const (
 	TOKEN_DIVIDE
 	TOKEN_MODULO
 	TOKEN_QUOTATION
+	TOKEN_FLOAT
+	TOKEN_FLOAT_KEYWORD
 )
 
 func main() {
@@ -95,6 +97,10 @@ func (l *Lexer) NextToken() Token {
 
 		if value == "int" {
 			return Token{TOKEN_INT_KEYWORD, value}
+		}
+
+		if value == "float" {
+			return Token{TOKEN_FLOAT_KEYWORD, value}
 		}
 
 		if value == "print" {
@@ -200,10 +206,19 @@ func (p *Parser) Parse() {
 }
 
 func (p *Parser) parseReAssignVar() {
-	varName := p.expect(TOKEN_IDENT)
+	varName := p.expect(TOKEN_IDENT).Val
 	p.expect(TOKEN_ASSIGN)
-	varVal := p.expect(TOKEN_INT)
-	p.setVar(varName.Val, varVal.Val)
+	var varVal string
+	switch p.CurrentToken.Type {
+	case TOKEN_INT:
+		varVal = p.expect(TOKEN_INT).Val
+	case TOKEN_STRING:
+		varVal = p.expect(TOKEN_STRING).Val
+	case TOKEN_FLOAT:
+		varVal = p.expect(TOKEN_FLOAT).Val
+	}
+
+	p.setVar(varName, varVal)
 	p.expect(TOKEN_SEMICOLON)
 }
 
@@ -292,6 +307,16 @@ func (p *Parser) printArgument() {
 
 func (p *Parser) parseInt() {
 	p.expect(TOKEN_INT_KEYWORD)
+
+	ident := p.expect(TOKEN_IDENT)
+	p.expect(TOKEN_ASSIGN)
+	result := p.parseExpression()
+	p.expect(TOKEN_SEMICOLON)
+	p.setVar(ident.Val, strconv.Itoa(result))
+}
+
+func (p *Parser) parseFloat() {
+	p.expect(TOKEN_FLOAT_KEYWORD)
 
 	ident := p.expect(TOKEN_IDENT)
 	p.expect(TOKEN_ASSIGN)
