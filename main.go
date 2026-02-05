@@ -287,9 +287,9 @@ func (p *Parser) printString() {
 		p.printArgument()
 
 		if p.CurrentToken.Type == TOKEN_COMMA {
+			fmt.Println("")
 			p.expect(TOKEN_COMMA)
-			fmt.Print(" ")
-			continue
+			panic("запятая")
 		}
 		break
 	}
@@ -471,7 +471,6 @@ func (p *Parser) parseInput() {
 	p.expect(TOKEN_LPAREN)
 
 	ident := p.expect(TOKEN_IDENT).Val
-	fmt.Println(p.CurrentToken)
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
 
