@@ -1,0 +1,23 @@
+string user = "Kepr";
+int a = 10;
+int b = 3;
+
+func add(x, y) {
+    return x + y;
+}
+
+func divide(x, y) {
+    return x / y;
+}
+
+func greet(name) {
+    printf("Добро пожаловать, %s!\n", name);
+}
+
+greet(user);
+
+int sum = add(a, b);
+printf("Сумма: %d\n", sum);
+
+float result = divide(a, b);
+printf("Деление: %f\n", result);
