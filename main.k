@@ -1,2 +1,2 @@
-print("hello world!");
-print("hello\nworld\n!");
+user = "John";
+printf("hello, %s\n",user);

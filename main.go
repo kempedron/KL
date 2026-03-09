@@ -102,6 +102,9 @@ func (l *Lexer) NextToken() Token {
 		if value == "input" {
 			return Token{TOKEN_INPUT_KEYWORD, value}
 		}
+		if value == "printf" {
+			return Token{TOKEN_PRINTF, value}
+		}
 		return Token{TOKEN_IDENT, value}
 	}
 
@@ -129,6 +132,7 @@ func (l *Lexer) NextToken() Token {
 				l.CurrentPos++
 				break
 			}
+
 			if ch == '\\' {
 				l.CurrentPos++
 				if l.CurrentPos >= len(l.InputString) {
@@ -208,7 +212,22 @@ func (parser *Parser) advanceParser() {
 	parser.CurrentToken = parser.Lexer.NextToken()
 }
 
+func (p *Parser) printf() {
+	p.expect(TOKEN_PRINTF)
+	p.expect(TOKEN_LPAREN)
+
+	strToFormatting := p.expect(TOKEN_STRING)
+	p.expect(TOKEN_COMMA)
+	arg := p.expect(TOKEN_IDENT).Val
+	varVal := p.GetVar(arg)
+
+	fmt.Printf(strToFormatting.Val, varVal)
+	p.expect(TOKEN_RPAREN)
+	p.expect(TOKEN_SEMICOLON)
+}
+
 func (p *Parser) Parse() {
+	//println(p.CurrentToken.Type)
 	switch p.CurrentToken.Type {
 	case TOKEN_INT_KEYWORD:
 		p.parseInt()
@@ -224,6 +243,8 @@ func (p *Parser) Parse() {
 		p.parseFloat()
 	case TOKEN_INPUT_KEYWORD:
 		p.parseInput()
+	case TOKEN_PRINTF:
+		p.printf()
 	default:
 		panic(fmt.Sprintf("неизвестный токен: %v", p.CurrentToken.Type))
 	}
@@ -262,7 +283,6 @@ func (p *Parser) printVar() {
 	if p.CurrentToken.Type == TOKEN_RPAREN {
 		p.expect(TOKEN_RPAREN)
 		p.expect(TOKEN_SEMICOLON)
-		fmt.Println()
 		return
 
 	}
@@ -272,7 +292,6 @@ func (p *Parser) printVar() {
 		p.printArgument()
 		if p.CurrentToken.Type == TOKEN_COMMA {
 			p.expect(TOKEN_COMMA)
-			fmt.Print(" ")
 			continue
 		}
 		break
@@ -287,16 +306,13 @@ func (p *Parser) printVar() {
 func (p *Parser) printString() {
 	p.expect(TOKEN_QUOTATION)
 
-	for {
-		p.printArgument()
+	p.printArgument()
 
-		if p.CurrentToken.Type == TOKEN_COMMA {
-			fmt.Println("")
-			p.expect(TOKEN_COMMA)
-			panic("запятая")
-		}
-		break
-	}
+	// if p.CurrentToken.Type == TOKEN_COMMA {
+	// 	fmt.Println("")
+	// 	p.expect(TOKEN_COMMA)
+	// 	panic("запятая")
+	// }
 
 	p.expect(TOKEN_QUOTATION)
 	p.expect(TOKEN_RPAREN)
@@ -487,4 +503,11 @@ func (p *Parser) parseInput() {
 	} else {
 		panic(fmt.Sprintf("undeclared var: %v", ident))
 	}
+}
+
+func (p *Parser) GetVar(varname string) string {
+	if val, ok := p.Variables[varname]; ok {
+		return val
+	}
+	panic(fmt.Sprintf("undeclared var: %v", varname))
 }
