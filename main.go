@@ -38,6 +38,23 @@ type Lexer struct {
 	InputString string
 }
 
+type Value struct {
+	Type  string
+	Int   int
+	Float float64
+	Str   string
+}
+
+type Function struct {
+	Name   string
+	Params []string
+	Body   []Token
+}
+
+type ILexer interface {
+	NextToken() Token
+}
+
 func NewLexer(inpStr string) *Lexer {
 	return &Lexer{
 		InputString: inpStr,
@@ -105,6 +122,12 @@ func (l *Lexer) NextToken() Token {
 		if value == "printf" {
 			return Token{TOKEN_PRINTF, value}
 		}
+		if value == "func" {
+			return Token{TOKEN_FUNC_KEYWORD, value}
+		}
+		if value == "return" {
+			return Token{TOKEN_RETURN_KEYWORD, value}
+		}
 		return Token{TOKEN_IDENT, value}
 	}
 
@@ -121,6 +144,10 @@ func (l *Lexer) NextToken() Token {
 		return Token{TOKEN_LPAREN, "("}
 	case ')':
 		return Token{TOKEN_RPAREN, ")"}
+	case '{':
+		return Token{TOKEN_LBRACE, "{"}
+	case '}':
+		return Token{TOKEN_RBRACE, "}"}
 	case '"':
 
 		var sb strings.Builder
@@ -183,13 +210,14 @@ func (l *Lexer) NextToken() Token {
 }
 
 type Parser struct {
-	Lexer        *Lexer
+	Lexer        ILexer
 	CurrentToken Token
-	Variables    map[string]string
+	Variables    map[string]Value
+	Functions    map[string]Function
 }
 
 func NewParser(lexer *Lexer) *Parser {
-	p := &Parser{Lexer: lexer, Variables: make(map[string]string, 10)}
+	p := &Parser{Lexer: lexer, Variables: make(map[string]Value, 10), Functions: make(map[string]Function)}
 	p.CurrentToken = p.Lexer.NextToken()
 	return p
 }
@@ -207,24 +235,38 @@ func (p *Parser) expect(t TOKEN_TYPE) Token {
 
 func (parser *Parser) advanceParser() {
 	if parser.CurrentToken.Type == TOKEN_EOF {
-		os.Exit(0)
+		return
 	}
 	parser.CurrentToken = parser.Lexer.NextToken()
 }
 
-func (p *Parser) printf() {
+func (p *Parser) ParsePrintf() {
 	p.expect(TOKEN_PRINTF)
 	p.expect(TOKEN_LPAREN)
 
-	strToFormatting := p.expect(TOKEN_STRING)
+	strToFormatting := p.expect(TOKEN_STRING).Val
 	p.expect(TOKEN_COMMA)
 	arg := p.expect(TOKEN_IDENT).Val
 	varVal := p.GetVar(arg)
+	var argVal any
+	switch varVal.Type {
+	case "string":
+		argVal = varVal.Str
+	case "int":
+		argVal = varVal.Int
+	case "float":
+		argVal = varVal.Float
+	default:
+		argVal = varVal
 
-	fmt.Printf(strToFormatting.Val, varVal)
+	}
+	fmt.Printf(strToFormatting, argVal)
+
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
 }
+
+//здесь точка нужная сюда (для поиска)
 
 func (p *Parser) Parse() {
 	//println(p.CurrentToken.Type)
@@ -238,13 +280,19 @@ func (p *Parser) Parse() {
 	case TOKEN_STRING_KEYWORD:
 		p.parseStr()
 	case TOKEN_IDENT:
-		p.parseReAssignVar()
+		if p.isFuncCall() {
+			p.callFunc()
+		} else {
+			p.parseReAssignVar()
+		}
 	case TOKEN_FLOAT_KEYWORD:
 		p.parseFloat()
 	case TOKEN_INPUT_KEYWORD:
 		p.parseInput()
 	case TOKEN_PRINTF:
-		p.printf()
+		p.ParsePrintf()
+	case TOKEN_FUNC_KEYWORD:
+		p.ParseFunc()
 	default:
 		panic(fmt.Sprintf("неизвестный токен: %v", p.CurrentToken.Type))
 	}
@@ -254,14 +302,22 @@ func (p *Parser) Parse() {
 func (p *Parser) parseReAssignVar() {
 	varName := p.expect(TOKEN_IDENT).Val
 	p.expect(TOKEN_ASSIGN)
-	var varVal string
+	var varVal Value
 	switch p.CurrentToken.Type {
 	case TOKEN_INT:
-		varVal = p.expect(TOKEN_INT).Val
+		integer, err := strconv.Atoi(p.expect(TOKEN_INT).Val)
+		if err != nil {
+			panic(fmt.Sprintf("failed atoi: %s", err))
+		}
+		varVal = Value{Type: "int", Int: integer}
 	case TOKEN_STRING:
-		varVal = p.expect(TOKEN_STRING).Val
+		varVal = Value{Type: "string", Str: p.expect(TOKEN_STRING).Val}
 	case TOKEN_FLOAT:
-		varVal = p.expect(TOKEN_FLOAT).Val
+		f, err := strconv.ParseFloat(p.expect(TOKEN_FLOAT).Val, 64)
+		if err != nil {
+			panic(fmt.Sprintf("failed atoi: %s", err))
+		}
+		varVal = Value{Type: "float", Float: f}
 	}
 
 	p.setVar(varName, varVal)
@@ -336,7 +392,14 @@ func (p *Parser) printArgument() {
 			panic(fmt.Sprintf("undeclarated var: %v", p.CurrentToken.Val))
 		}
 		val := p.Variables[p.CurrentToken.Val]
-		fmt.Print(val)
+		switch val.Type {
+		case "int":
+			fmt.Print(val.Int)
+		case "float":
+			fmt.Println(val.Float)
+		case "string":
+			fmt.Print(val.Str)
+		}
 		p.advanceParser()
 	case TOKEN_INT:
 		result := p.parseExpression()
@@ -355,7 +418,8 @@ func (p *Parser) parseInt() {
 	p.expect(TOKEN_ASSIGN)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
-	p.setVar(ident.Val, strconv.Itoa(int(result)))
+
+	p.setVar(ident.Val, Value{Type: "int", Int: int(result)})
 }
 
 func (p *Parser) parseFloat() {
@@ -365,7 +429,7 @@ func (p *Parser) parseFloat() {
 	p.expect(TOKEN_ASSIGN)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
-	p.setVar(ident.Val, fmt.Sprintf("%f", result))
+	p.setVar(ident.Val, Value{Type: "float", Float: float64(result)})
 }
 
 func (p *Parser) parseStr() {
@@ -375,10 +439,10 @@ func (p *Parser) parseStr() {
 	t := p.expect(TOKEN_STRING)
 
 	p.expect(TOKEN_SEMICOLON)
-	p.setVar(ident.Val, t.Val)
+	p.setVar(ident.Val, Value{Type: "string", Str: t.Val})
 }
 
-func (p *Parser) setVar(varname string, val string) {
+func (p *Parser) setVar(varname string, val Value) {
 	p.Variables[varname] = val
 }
 
@@ -451,6 +515,7 @@ func (p *Parser) parsePrimary() float64 {
 			panic(fmt.Sprintf("невалидное число для int: %s", token.Val))
 		}
 		return float64(val)
+
 	case TOKEN_FLOAT:
 		token := p.expect(TOKEN_FLOAT)
 		val, err := strconv.ParseFloat(token.Val, 64)
@@ -460,9 +525,15 @@ func (p *Parser) parsePrimary() float64 {
 		return val
 	case TOKEN_IDENT:
 		token := p.expect(TOKEN_IDENT)
+		if _, isFn := p.Functions[token.Val]; isFn {
+			return p.callFuncExpr(token.Val)
+		}
 		if val, ok := p.Variables[token.Val]; ok {
-			if valI, err := strconv.ParseFloat(val, 64); err == nil {
-				return valI
+			if val.Type == "float" {
+				return val.Float
+			}
+			if val.Type == "int" {
+				return float64(val.Int)
 			}
 			panic(fmt.Sprintf("невалидное число: %s", token.Val))
 		}
@@ -499,15 +570,137 @@ func (p *Parser) parseInput() {
 	if p.isVar(ident) {
 		var input string
 		fmt.Scan(&input)
-		p.Variables[ident] = input
+		p.Variables[ident] = Value{Type: "string", Str: input}
 	} else {
 		panic(fmt.Sprintf("undeclared var: %v", ident))
 	}
 }
 
-func (p *Parser) GetVar(varname string) string {
+func (p *Parser) GetVar(varname string) Value {
 	if val, ok := p.Variables[varname]; ok {
 		return val
 	}
 	panic(fmt.Sprintf("undeclared var: %v", varname))
+}
+
+func (p *Parser) ParseFunc() {
+	p.expect(TOKEN_FUNC_KEYWORD)
+	funcName := p.expect(TOKEN_IDENT).Val
+	p.expect(TOKEN_LPAREN)
+	var params []string
+	for p.CurrentToken.Type != TOKEN_RPAREN {
+		param := p.expect(TOKEN_IDENT).Val
+		params = append(params, param)
+		if p.CurrentToken.Type != TOKEN_RPAREN {
+			p.expect(TOKEN_COMMA)
+		}
+
+	}
+	p.expect(TOKEN_RPAREN)
+	p.expect(TOKEN_LBRACE)
+
+	var body []Token
+	depth := 1
+	for depth > 0 {
+		tok := p.CurrentToken
+		if tok.Type == TOKEN_LBRACE {
+			depth++
+		}
+		if tok.Type == TOKEN_RBRACE {
+			depth--
+		}
+		if depth > 0 {
+			body = append(body, tok)
+		}
+		p.advanceParser()
+	}
+	p.Functions[funcName] = Function{Name: funcName, Params: params, Body: body}
+
+}
+
+func (p *Parser) isFuncCall() bool {
+	name := p.CurrentToken.Val
+	_, isFn := p.Functions[name]
+	return isFn
+}
+
+func (p *Parser) callFunc() Value {
+	name := p.expect(TOKEN_IDENT).Val
+	if _, isFn := p.Functions[name]; !isFn {
+		panic(fmt.Sprintf("Unknow functions: %s", name))
+	}
+	result := p.callFuncExpr(name)
+	p.expect(TOKEN_SEMICOLON)
+	return Value{Type: "float", Float: result}
+
+}
+
+type TokenSliceLexer struct {
+	Tokens []Token
+	Pos    int
+}
+
+func (t *TokenSliceLexer) NextToken() Token {
+	if t.Pos >= len(t.Tokens) {
+		return Token{Type: TOKEN_EOF}
+	}
+	tok := t.Tokens[t.Pos]
+	t.Pos++
+	return tok
+}
+
+func (p *Parser) callFuncExpr(name string) float64 {
+	fn, ok := p.Functions[name]
+	if !ok {
+		panic(fmt.Sprintf("Unknow functions: %s", name))
+	}
+	p.expect(TOKEN_LPAREN)
+
+	var args []Value
+	for p.CurrentToken.Type != TOKEN_RPAREN {
+		args = append(args, p.parseArgValue())
+		if p.CurrentToken.Type == TOKEN_COMMA {
+			p.expect(TOKEN_COMMA)
+		}
+	}
+	p.expect(TOKEN_RPAREN)
+
+	if len(args) != len(fn.Params) {
+		panic(fmt.Sprintf("wrong number of arguments: %d != %d", len(args), len(fn.Params)))
+	}
+
+	bodyLexer := &TokenSliceLexer{Tokens: fn.Body, Pos: 0}
+	subParser := &Parser{
+		Lexer:     bodyLexer,
+		Variables: make(map[string]Value),
+		Functions: p.Functions,
+	}
+	for i, param := range fn.Params {
+		subParser.Variables[param] = args[i]
+	}
+	subParser.CurrentToken = bodyLexer.NextToken()
+
+	for subParser.CurrentToken.Type != TOKEN_EOF {
+		if subParser.CurrentToken.Type == TOKEN_RETURN_KEYWORD {
+			subParser.advanceParser()
+			return subParser.parseExpression()
+		}
+		subParser.Parse()
+	}
+	return 0
+}
+
+func (p *Parser) parseArgValue() Value {
+	switch p.CurrentToken.Type {
+	case TOKEN_STRING:
+		return Value{Type: "string", Str: p.expect(TOKEN_STRING).Val}
+	case TOKEN_IDENT:
+		if val, ok := p.Variables[p.CurrentToken.Val]; ok && val.Type == "string" {
+			p.advanceParser()
+			return val
+		}
+		return Value{Type: "float", Float: p.parseExpression()}
+	default:
+		return Value{Type: "float", Float: p.parseExpression()}
+	}
 }

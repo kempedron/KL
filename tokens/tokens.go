@@ -30,5 +30,10 @@ const (
 	TOKEN_FOR_FORMATTING_TO_INT   // %d
 	TOKEN_FOR_FORMATTING_TO_FLOAT // %f
 	TOKEN_PRINTF                  // printf
+	TOKEN_FUNCTION_NAME           //func name
+	TOKEN_FUNC_KEYWORD            //func
+	TOKEN_RETURN_KEYWORD          //return
+	TOKEN_LBRACE                  // {
+	TOKEN_RBRACE                  // }
 
 )

@@ -1,2 +1,10 @@
-user = "John";
-printf("hello, %s\n",user);
+func HelloWorld() {
+    print("Hello, World!\n");
+}
+
+func SayHello(name) {
+    printf("Hello, %s!\n", name);
+}
+
+HelloWorld();
+SayHello("Kepr proroditel");
