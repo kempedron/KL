@@ -1,5 +1,8 @@
-int a = 12;
-print(1+a);
-
-int a = 2 + 4;
+int a = 24*5/3+1;
 print(a);
+
+float b = 3.14;
+print(b);
+
+string c = "hello world";
+print(c,a,b);

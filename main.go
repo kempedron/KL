@@ -2,42 +2,16 @@ package main
 
 import (
 	"fmt"
+	. "kl/tokens"
 	"os"
 	"strconv"
+	"strings"
 	"unicode"
-)
-
-type TOKEN_TYPE int
-
-const (
-	TOKEN_INT   TOKEN_TYPE = iota
-	TOKEN_PRINT            // print
-	TOKEN_EOF
-	TOKEN_IDENT          // имя переменной
-	TOKEN_SEMICOLON      // ;
-	TOKEN_ASSIGN         // =
-	TOKEN_LPAREN         // (
-	TOKEN_RPAREN         // )
-	TOKEN_INT_KEYWORD    // int
-	TOKEN_COMMA          // ,
-	TOKEN_SPACE          // пробел
-	TOKEN_STRING         // type string
-	TOKEN_STRING_KEYWORD // 'string'
-	TOKEN_PLUS           // +
-	TOKEN_MINUS          // -
-	TOKEN_MULTIPLY       // *
-	TOKEN_DIVIDE         // /
-	TOKEN_MODULO         // %
-	TOKEN_QUOTATION      // "
-	TOKEN_FLOAT          // type float
-	TOKEN_FLOAT_KEYWORD  // 'float'
-	TOKEN_INPUT_KEYWORD  // 'input'
-	TOKEN_NEW_LINE       //  \n
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("использование ./kepr <файл с кодом>")
+		fmt.Println("использование ./kl <файл с кодом>")
 		os.Exit(1)
 	}
 
@@ -145,16 +119,43 @@ func (l *Lexer) NextToken() Token {
 	case ')':
 		return Token{TOKEN_RPAREN, ")"}
 	case '"':
-		start := l.CurrentPos
-		l.CurrentPos++
 
-		for l.CurrentPos < len(l.InputString) && l.InputString[l.CurrentPos] != '"' {
-			l.CurrentPos++
+		var sb strings.Builder
+
+		for l.CurrentPos < len(l.InputString) {
+
+			ch := l.InputString[l.CurrentPos]
+			if ch == '"' {
+				l.CurrentPos++
+				break
+			}
+			if ch == '\\' {
+				l.CurrentPos++
+				if l.CurrentPos >= len(l.InputString) {
+					panic("незакрытая escape последовательность")
+				}
+				switch l.InputString[l.CurrentPos] {
+				case 'n':
+					sb.WriteRune('\n')
+				case 't':
+					sb.WriteRune('\t')
+				case '\\':
+					sb.WriteRune('\\')
+				case '"':
+					sb.WriteRune('"')
+				default:
+					sb.WriteByte('\\')
+					sb.WriteByte(l.InputString[l.CurrentPos])
+				}
+				l.CurrentPos++
+			} else {
+				sb.WriteByte(ch)
+				l.CurrentPos++
+			}
+
 		}
 
-		stringContent := l.InputString[start:l.CurrentPos]
-		l.CurrentPos++
-		return Token{TOKEN_STRING, stringContent}
+		return Token{TOKEN_STRING, sb.String()}
 	case ',':
 		return Token{TOKEN_COMMA, ","}
 	case '+':
@@ -169,6 +170,8 @@ func (l *Lexer) NextToken() Token {
 		return Token{TOKEN_MODULO, "%"}
 	case ' ':
 		return Token{TOKEN_SPACE, " "}
+	case '\n':
+		return Token{TOKEN_NEW_LINE, "\n"}
 
 	}
 
@@ -325,6 +328,8 @@ func (p *Parser) printArgument() {
 	case TOKEN_FLOAT:
 		result := p.parseExpression()
 		fmt.Println(result)
+	case TOKEN_NEW_LINE:
+		fmt.Println()
 	}
 }
 
