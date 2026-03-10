@@ -89,7 +89,7 @@ print("Строка 1\nСтрока 2\n");
 
 ```
 string name = "";
-input(name);
+input(name,"введите ваше имя: ");
 printf("Привет, %s!\n", name);
 ```
 

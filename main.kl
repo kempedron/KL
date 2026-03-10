@@ -1,23 +1,17 @@
-string user = "Kepr";
-int a = 10;
-int b = 3;
+int b;
+int c = 0;
 
-func add(x, y) {
-    return x + y;
-}
+printf("b: %d\nc: %d\n",b,c);
 
-func divide(x, y) {
-    return x / y;
-}
+string b = "";
+string c;
 
-func greet(name) {
-    printf("Добро пожаловать, %s!\n", name);
-}
+printf("b: %s\nc: %s\n",b,c);
 
-greet(user);
+float b = 0.0;
+float c;
 
-int sum = add(a, b);
-printf("Сумма: %d\n", sum);
+printf("b: %f\nc: %f\n",b,c);
 
-float result = divide(a, b);
-printf("Деление: %f\n", result);
+float c = "WTF";
+print(c);

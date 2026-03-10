@@ -1,8 +1,32 @@
-int a = 24*5/3+1;
-print(a);
 
-float b = 3.14;
-print(b);
+func add(x, y) {
+    return x + y;
+}
 
-string c = "hello world";
-print(c,a,b);
+func divide(x, y) {
+    return x / y;
+}
+
+func greet(name) {
+    printf("Добро пожаловать, %s!\n", name);
+}
+
+func Hello() {
+	print("Привет, я KL!\n");
+}
+
+Hello();
+
+greet(user);
+
+int sum = add(a, b);
+printf("Сумма: %d\n", sum);
+
+float result = divide(a, b);
+printf("Деление: %f\n", result);
+
+string name = "";
+input(name, "Введите ваше имя: ");
+printf("Привет, %s!\n", name);
+name = 3.4;
+print(name);

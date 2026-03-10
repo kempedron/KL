@@ -53,6 +53,7 @@ type Function struct {
 
 type ILexer interface {
 	NextToken() Token
+	GetNextToken() Token
 }
 
 func NewLexer(inpStr string) *Lexer {
@@ -61,6 +62,10 @@ func NewLexer(inpStr string) *Lexer {
 		CurrentPos:  0,
 	}
 
+}
+
+func (l Lexer) GetNextToken() Token {
+	return l.NextToken()
 }
 
 func (l *Lexer) NextToken() Token {
@@ -243,7 +248,7 @@ func (parser *Parser) advanceParser() {
 func (p *Parser) ParsePrintf() {
 	p.expect(TOKEN_PRINTF)
 	p.expect(TOKEN_LPAREN)
-
+	var args []any
 	strToFormatting := p.expect(TOKEN_STRING).Val
 	p.expect(TOKEN_COMMA)
 	arg := p.expect(TOKEN_IDENT).Val
@@ -258,12 +263,31 @@ func (p *Parser) ParsePrintf() {
 		argVal = varVal.Float
 	default:
 		argVal = varVal
-
 	}
-	fmt.Printf(strToFormatting, argVal)
+	args = append(args, argVal)
 
+	for p.CurrentToken.Type != TOKEN_RPAREN {
+		p.expect(TOKEN_COMMA)
+		arg := p.expect(TOKEN_IDENT).Val
+		varVal := p.GetVar(arg)
+		var argVal any
+		switch varVal.Type {
+		case "string":
+			argVal = varVal.Str
+		case "int":
+			argVal = varVal.Int
+		case "float":
+			argVal = varVal.Float
+		default:
+			argVal = varVal
+		}
+		args = append(args, argVal)
+	}
+
+	fmt.Printf(strToFormatting, args...)
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
+
 }
 
 //здесь точка нужная сюда (для поиска)
@@ -415,8 +439,17 @@ func (p *Parser) printArgument() {
 func (p *Parser) parseInt() {
 	p.expect(TOKEN_INT_KEYWORD)
 	ident := p.expect(TOKEN_IDENT)
+
+	if p.CurrentToken.Type == TOKEN_SEMICOLON {
+
+		p.setVar(ident.Val, Value{Type: "int", Int: 0})
+		p.expect(TOKEN_SEMICOLON)
+		return
+	}
 	p.expect(TOKEN_ASSIGN)
+
 	result := p.parseExpression()
+
 	p.expect(TOKEN_SEMICOLON)
 
 	p.setVar(ident.Val, Value{Type: "int", Int: int(result)})
@@ -425,7 +458,11 @@ func (p *Parser) parseInt() {
 func (p *Parser) parseFloat() {
 	p.expect(TOKEN_FLOAT_KEYWORD)
 	ident := p.expect(TOKEN_IDENT)
-
+	if p.CurrentToken.Type == TOKEN_SEMICOLON {
+		p.setVar(ident.Val, Value{Type: "float", Float: 0})
+		p.expect(TOKEN_SEMICOLON)
+		return
+	}
 	p.expect(TOKEN_ASSIGN)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
@@ -435,6 +472,11 @@ func (p *Parser) parseFloat() {
 func (p *Parser) parseStr() {
 	p.expect(TOKEN_STRING_KEYWORD)
 	ident := p.expect(TOKEN_IDENT)
+	if p.CurrentToken.Type == TOKEN_SEMICOLON {
+		p.setVar(ident.Val, Value{Type: "string", Str: ""})
+		p.expect(TOKEN_SEMICOLON)
+		return
+	}
 	p.expect(TOKEN_ASSIGN)
 	t := p.expect(TOKEN_STRING)
 
@@ -564,11 +606,14 @@ func (p *Parser) parseInput() {
 	p.expect(TOKEN_LPAREN)
 
 	ident := p.expect(TOKEN_IDENT).Val
+	p.expect(TOKEN_COMMA)
+	text := p.expect(TOKEN_STRING).Val
 	p.expect(TOKEN_RPAREN)
 	p.expect(TOKEN_SEMICOLON)
 
 	if p.isVar(ident) {
 		var input string
+		fmt.Println(text)
 		fmt.Scan(&input)
 		p.Variables[ident] = Value{Type: "string", Str: input}
 	} else {
@@ -647,6 +692,13 @@ func (t *TokenSliceLexer) NextToken() Token {
 	tok := t.Tokens[t.Pos]
 	t.Pos++
 	return tok
+}
+
+func (t *TokenSliceLexer) GetNextToken() Token {
+	if t.Pos >= len(t.Tokens) {
+		return Token{Type: TOKEN_EOF}
+	}
+	return t.Tokens[t.Pos]
 }
 
 func (p *Parser) callFuncExpr(name string) float64 {
