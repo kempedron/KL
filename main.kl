@@ -3,15 +3,43 @@ int c = 0;
 
 printf("b: %d\nc: %d\n",b,c);
 
-string b = "";
-string c;
 
 printf("b: %s\nc: %s\n",b,c);
 
-float b = 0.0;
-float c;
-
 printf("b: %f\nc: %f\n",b,c);
 
-float c = "WTF";
-print(c);
+func add(x, y) {
+    return x + y;
+}
+
+func divide(x, y) {
+    return x / y;
+}
+
+func greet(name) {
+    printf("Добро пожаловать, %s!\n", name);
+}
+
+func Hello() {
+	print("Привет, я KL!\n");
+}
+
+Hello();
+
+string user1 = "user322";
+
+greet(user1);
+
+
+int a;
+int b =322;
+
+int sum = add(a, b);
+printf("Сумма: %d\n", sum);
+
+float result = divide(a, b);
+printf("Деление: %f\n", result);
+
+string name = "";
+input(name, "Введите ваше имя: ");
+printf("Привет, %s!\n", name);

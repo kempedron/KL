@@ -1,5 +1,7 @@
 package tokens
 
+import "fmt"
+
 type TOKEN_TYPE int
 
 const (
@@ -37,3 +39,60 @@ const (
 	TOKEN_RBRACE                  // }
 
 )
+
+func (t TOKEN_TYPE) String() string {
+	switch t {
+	case TOKEN_INT:
+		return "int literal"
+	case TOKEN_FLOAT:
+		return "float literal"
+	case TOKEN_STRING:
+		return "string literal"
+	case TOKEN_IDENT:
+		return "identifier"
+	case TOKEN_ASSIGN:
+		return "'='"
+	case TOKEN_SEMICOLON:
+		return "';'"
+	case TOKEN_LPAREN:
+		return "'('"
+	case TOKEN_RPAREN:
+		return "')'"
+	case TOKEN_LBRACE:
+		return "'{'"
+	case TOKEN_RBRACE:
+		return "'}'"
+	case TOKEN_PLUS:
+		return "'+'"
+	case TOKEN_MINUS:
+		return "'-'"
+	case TOKEN_MULTIPLY:
+		return "'*'"
+	case TOKEN_DIVIDE:
+		return "'/'"
+	case TOKEN_MODULO:
+		return "'%'"
+	case TOKEN_COMMA:
+		return "','"
+	case TOKEN_EOF:
+		return "end of file"
+	case TOKEN_INT_KEYWORD:
+		return "'int'"
+	case TOKEN_FLOAT_KEYWORD:
+		return "'float'"
+	case TOKEN_STRING_KEYWORD:
+		return "'string'"
+	case TOKEN_FUNC_KEYWORD:
+		return "'func'"
+	case TOKEN_RETURN_KEYWORD:
+		return "'return'"
+	case TOKEN_PRINT:
+		return "'print'"
+	case TOKEN_PRINTF:
+		return "'printf'"
+	case TOKEN_INPUT_KEYWORD:
+		return "'input'"
+	default:
+		return fmt.Sprintf("token(%d)", t)
+	}
+}

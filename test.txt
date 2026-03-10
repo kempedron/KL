@@ -1,3 +1,12 @@
+int b;
+int c = 0;
+
+printf("b: %d\nc: %d\n",b,c);
+
+
+printf("b: %s\nc: %s\n",b,c);
+
+printf("b: %f\nc: %f\n",b,c);
 
 func add(x, y) {
     return x + y;
@@ -17,7 +26,13 @@ func Hello() {
 
 Hello();
 
-greet(user);
+string user1 = "user322";
+
+greet(user1);
+
+
+int a;
+int b =322;
 
 int sum = add(a, b);
 printf("Сумма: %d\n", sum);

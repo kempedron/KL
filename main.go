@@ -10,8 +10,16 @@ import (
 )
 
 func main() {
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", r)
+			os.Exit(1)
+		}
+	}()
+
 	if len(os.Args) < 2 {
-		fmt.Println("использование ./kl <файл с кодом>")
+		fmt.Println("использование ./kl <файл .kl>")
 		os.Exit(1)
 	}
 
@@ -31,11 +39,15 @@ func main() {
 type Token struct {
 	Type TOKEN_TYPE
 	Val  string
+	Line int
+	Col  int
 }
 
 type Lexer struct {
 	CurrentPos  int
 	InputString string
+	Line        int
+	Col         int
 }
 
 type Value struct {
@@ -51,9 +63,18 @@ type Function struct {
 	Body   []Token
 }
 
+type LangError struct {
+	Line    int
+	Col     int
+	Message string
+}
 type ILexer interface {
 	NextToken() Token
 	GetNextToken() Token
+}
+
+func (p *Parser) langError(tok Token, msg string) {
+	panic(fmt.Sprintf("%d:%d: %s", tok.Line+1, tok.Col+1, msg))
 }
 
 func NewLexer(inpStr string) *Lexer {
@@ -68,9 +89,21 @@ func (l Lexer) GetNextToken() Token {
 	return l.NextToken()
 }
 
+func (l *Lexer) advance() {
+	if l.CurrentPos < len(l.InputString) {
+		if l.InputString[l.CurrentPos] == '\n' {
+			l.Line++
+			l.Col = 0
+		} else {
+			l.Col++
+		}
+		l.CurrentPos++
+	}
+}
+
 func (l *Lexer) NextToken() Token {
 	for l.CurrentPos < len(l.InputString) && unicode.IsSpace(rune(l.InputString[l.CurrentPos])) {
-		l.CurrentPos++
+		l.advance()
 	}
 
 	if l.CurrentPos >= len(l.InputString) {
@@ -78,6 +111,7 @@ func (l *Lexer) NextToken() Token {
 	}
 
 	if unicode.IsDigit(rune(l.InputString[l.CurrentPos])) {
+		line, col := l.Line, l.Col
 		start := l.CurrentPos
 		hasDecimal := false
 		for l.CurrentPos < len(l.InputString) && (unicode.IsDigit(rune(l.InputString[l.CurrentPos])) || l.InputString[l.CurrentPos] == '.') {
@@ -87,72 +121,74 @@ func (l *Lexer) NextToken() Token {
 				}
 				hasDecimal = true
 			}
-			l.CurrentPos++
+			l.advance()
 
 		}
 		value := l.InputString[start:l.CurrentPos]
 		if hasDecimal {
-			return Token{TOKEN_FLOAT, value}
+			return Token{TOKEN_FLOAT, value, line, col}
 		}
 
-		return Token{TOKEN_INT, value}
+		return Token{TOKEN_INT, value, line, col}
 	}
 
 	if unicode.IsLetter(rune(l.InputString[l.CurrentPos])) {
 		start := l.CurrentPos
+		line, col := l.Line, l.Col
 
 		for l.CurrentPos < len(l.InputString) && (unicode.IsLetter(rune(l.InputString[l.CurrentPos]))) || unicode.IsDigit(rune(l.InputString[l.CurrentPos])) {
-			l.CurrentPos++
+			l.advance()
 		}
 		value := l.InputString[start:l.CurrentPos]
 
 		if value == "int" {
-			return Token{TOKEN_INT_KEYWORD, value}
+			return Token{TOKEN_INT_KEYWORD, value, line, col}
 		}
 
 		if value == "float" {
-			return Token{TOKEN_FLOAT_KEYWORD, value}
+			return Token{TOKEN_FLOAT_KEYWORD, value, line, col}
 		}
 
 		if value == "print" {
-			return Token{TOKEN_PRINT, value}
+			return Token{TOKEN_PRINT, value, line, col}
 		}
 
 		if value == "string" {
-			return Token{TOKEN_STRING_KEYWORD, value}
+			return Token{TOKEN_STRING_KEYWORD, value, line, col}
 		}
 		if value == "input" {
-			return Token{TOKEN_INPUT_KEYWORD, value}
+			return Token{TOKEN_INPUT_KEYWORD, value, line, col}
 		}
 		if value == "printf" {
-			return Token{TOKEN_PRINTF, value}
+			return Token{TOKEN_PRINTF, value, line, col}
 		}
 		if value == "func" {
-			return Token{TOKEN_FUNC_KEYWORD, value}
+			return Token{TOKEN_FUNC_KEYWORD, value, line, col}
 		}
 		if value == "return" {
-			return Token{TOKEN_RETURN_KEYWORD, value}
+			return Token{TOKEN_RETURN_KEYWORD, value, line, col}
 		}
-		return Token{TOKEN_IDENT, value}
+		return Token{TOKEN_IDENT, value, line, col}
 	}
 
 	ch := l.InputString[l.CurrentPos]
+	line, col := l.Line, l.Col
 
-	l.CurrentPos++
+	l.advance()
 
 	switch ch {
 	case '=':
-		return Token{TOKEN_ASSIGN, "="}
+		return Token{TOKEN_ASSIGN, "=", line, col}
 	case ';':
-		return Token{TOKEN_SEMICOLON, ";"}
+		return Token{TOKEN_SEMICOLON, ";", line, col}
 	case '(':
-		return Token{TOKEN_LPAREN, "("}
+		return Token{TOKEN_LPAREN, "(", line, col}
 	case ')':
-		return Token{TOKEN_RPAREN, ")"}
+		return Token{TOKEN_RPAREN, ")", line, col}
 	case '{':
-		return Token{TOKEN_LBRACE, "{"}
+		return Token{TOKEN_LBRACE, "{", line, col}
 	case '}':
-		return Token{TOKEN_RBRACE, "}"}
+		return Token{TOKEN_RBRACE, "}", line, col}
 	case '"':
 
 		var sb strings.Builder
@@ -161,7 +197,7 @@ func (l *Lexer) NextToken() Token {
 
 			ch := l.InputString[l.CurrentPos]
 			if ch == '"' {
-				l.CurrentPos++
+				l.advance()
 				break
 			}
 
@@ -183,31 +219,32 @@ func (l *Lexer) NextToken() Token {
 					sb.WriteByte('\\')
 					sb.WriteByte(l.InputString[l.CurrentPos])
 				}
-				l.CurrentPos++
+				l.advance()
 			} else {
 				sb.WriteByte(ch)
-				l.CurrentPos++
+				l.advance()
 			}
 
 		}
 
-		return Token{TOKEN_STRING, sb.String()}
+		return Token{TOKEN_STRING, sb.String(), line, col}
+
 	case ',':
-		return Token{TOKEN_COMMA, ","}
+		return Token{TOKEN_COMMA, ",", line, col}
 	case '+':
-		return Token{TOKEN_PLUS, "+"}
+		return Token{TOKEN_PLUS, "+", line, col}
 	case '-':
-		return Token{TOKEN_MINUS, "-"}
+		return Token{TOKEN_MINUS, "-", line, col}
 	case '*':
-		return Token{TOKEN_MULTIPLY, "*"}
+		return Token{TOKEN_MULTIPLY, "*", line, col}
 	case '/':
-		return Token{TOKEN_DIVIDE, "/"}
+		return Token{TOKEN_DIVIDE, "/", line, col}
 	case '%':
-		return Token{TOKEN_MODULO, "%"}
+		return Token{TOKEN_MODULO, "%", line, col}
 	case ' ':
-		return Token{TOKEN_SPACE, " "}
+		return Token{TOKEN_SPACE, " ", line, col}
 	case '\n':
-		return Token{TOKEN_NEW_LINE, "\n"}
+		return Token{TOKEN_NEW_LINE, "\n", line, col}
 
 	}
 
@@ -229,8 +266,7 @@ func NewParser(lexer *Lexer) *Parser {
 
 func (p *Parser) expect(t TOKEN_TYPE) Token {
 	if p.CurrentToken.Type != t {
-		fmt.Println()
-		panic(fmt.Sprintf("ошибка: токены не совпадают( %v(have) != %v(want))", p.CurrentToken.Type, t))
+		p.langError(p.CurrentToken, fmt.Sprintf("expected: '%v', got: '%v'", t.String(), p.CurrentToken.Type.String()))
 	}
 	token := p.CurrentToken
 	p.advanceParser()
@@ -326,6 +362,9 @@ func (p *Parser) Parse() {
 func (p *Parser) parseReAssignVar() {
 	varName := p.expect(TOKEN_IDENT).Val
 	p.expect(TOKEN_ASSIGN)
+	if existing, ok := p.Variables[varName]; ok {
+		p.checkTypeAssignment(varName, existing.Type, p.CurrentToken)
+	}
 	var varVal Value
 	switch p.CurrentToken.Type {
 	case TOKEN_INT:
@@ -342,6 +381,9 @@ func (p *Parser) parseReAssignVar() {
 			panic(fmt.Sprintf("failed atoi: %s", err))
 		}
 		varVal = Value{Type: "float", Float: f}
+	default:
+		result := p.parseExpression()
+		varVal = Value{Type: "float", Float: result}
 	}
 
 	p.setVar(varName, varVal)
@@ -447,7 +489,7 @@ func (p *Parser) parseInt() {
 		return
 	}
 	p.expect(TOKEN_ASSIGN)
-
+	p.checkTypeAssignment(ident.Val, "int", p.CurrentToken)
 	result := p.parseExpression()
 
 	p.expect(TOKEN_SEMICOLON)
@@ -464,6 +506,7 @@ func (p *Parser) parseFloat() {
 		return
 	}
 	p.expect(TOKEN_ASSIGN)
+	p.checkTypeAssignment(ident.Val, "float", p.CurrentToken)
 	result := p.parseExpression()
 	p.expect(TOKEN_SEMICOLON)
 	p.setVar(ident.Val, Value{Type: "float", Float: float64(result)})
@@ -478,6 +521,7 @@ func (p *Parser) parseStr() {
 		return
 	}
 	p.expect(TOKEN_ASSIGN)
+	p.checkTypeAssignment(ident.Val, "string", p.CurrentToken)
 	t := p.expect(TOKEN_STRING)
 
 	p.expect(TOKEN_SEMICOLON)
@@ -754,5 +798,37 @@ func (p *Parser) parseArgValue() Value {
 		return Value{Type: "float", Float: p.parseExpression()}
 	default:
 		return Value{Type: "float", Float: p.parseExpression()}
+	}
+}
+
+func (p *Parser) checkTypeAssignment(varName string, varType string, tok Token) {
+	switch varType {
+	case "float":
+		if tok.Type != TOKEN_FLOAT {
+			switch tok.Type {
+			case TOKEN_STRING:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type string) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			case TOKEN_INT:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type int) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			}
+		}
+	case "int":
+		if tok.Type != TOKEN_INT {
+			switch tok.Type {
+			case TOKEN_STRING:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type string) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			case TOKEN_FLOAT:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type float) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			}
+		}
+	case "string":
+		if tok.Type != TOKEN_STRING {
+			switch tok.Type {
+			case TOKEN_INT:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type int) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			case TOKEN_FLOAT:
+				p.langError(tok, fmt.Sprintf("cannot use %q (type float) as type %s in assignment to '%s'", tok.Val, varType, varName))
+			}
+		}
 	}
 }
