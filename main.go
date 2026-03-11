@@ -57,10 +57,16 @@ type Value struct {
 	Str   string
 }
 
+type Param struct {
+	Name string
+	Type string
+}
+
 type Function struct {
-	Name   string
-	Params []string
-	Body   []Token
+	Name       string
+	Params     []Param
+	Body       []Token
+	ReturnType string
 }
 
 type LangError struct {
@@ -454,8 +460,13 @@ func (p *Parser) printArgument() {
 		token := p.expect(TOKEN_STRING)
 		fmt.Print(token.Val)
 	case TOKEN_IDENT:
+		if _, isFn := p.Functions[p.CurrentToken.Val]; isFn {
+			result := p.parseExpression()
+			fmt.Print(result)
+			return
+		}
 		if !p.isVar(p.CurrentToken.Val) {
-			panic(fmt.Sprintf("undeclarated var: %v", p.CurrentToken.Val))
+			p.langError(p.CurrentToken, fmt.Sprintf("undefined: %s", p.CurrentToken.Val))
 		}
 		val := p.Variables[p.CurrentToken.Val]
 		switch val.Type {
@@ -674,18 +685,27 @@ func (p *Parser) GetVar(varname string) Value {
 
 func (p *Parser) ParseFunc() {
 	p.expect(TOKEN_FUNC_KEYWORD)
+	var returnType string
+
 	funcName := p.expect(TOKEN_IDENT).Val
 	p.expect(TOKEN_LPAREN)
-	var params []string
+	params := make([]Param, 0)
 	for p.CurrentToken.Type != TOKEN_RPAREN {
-		param := p.expect(TOKEN_IDENT).Val
-		params = append(params, param)
+		typeParam := p.CurrentToken.Val
+		p.advanceParser()
+		paramName := p.expect(TOKEN_IDENT).Val
+		params = append(params, Param{Name: paramName, Type: typeParam})
 		if p.CurrentToken.Type != TOKEN_RPAREN {
 			p.expect(TOKEN_COMMA)
 		}
 
 	}
 	p.expect(TOKEN_RPAREN)
+
+	if p.CurrentToken.Type != TOKEN_LBRACE {
+		returnType = p.CurrentToken.Val
+		p.advanceParser()
+	}
 	p.expect(TOKEN_LBRACE)
 
 	var body []Token
@@ -703,7 +723,7 @@ func (p *Parser) ParseFunc() {
 		}
 		p.advanceParser()
 	}
-	p.Functions[funcName] = Function{Name: funcName, Params: params, Body: body}
+	p.Functions[funcName] = Function{Name: funcName, Params: params, Body: body, ReturnType: returnType}
 
 }
 
@@ -748,7 +768,7 @@ func (t *TokenSliceLexer) GetNextToken() Token {
 func (p *Parser) callFuncExpr(name string) float64 {
 	fn, ok := p.Functions[name]
 	if !ok {
-		panic(fmt.Sprintf("Unknow functions: %s", name))
+		p.langError(p.CurrentToken, fmt.Sprintf("undefined: %s", name))
 	}
 	p.expect(TOKEN_LPAREN)
 
@@ -762,7 +782,14 @@ func (p *Parser) callFuncExpr(name string) float64 {
 	p.expect(TOKEN_RPAREN)
 
 	if len(args) != len(fn.Params) {
-		panic(fmt.Sprintf("wrong number of arguments: %d != %d", len(args), len(fn.Params)))
+		p.langError(p.CurrentToken, fmt.Sprintf("too many arguments in call to %s: have: %d, want: %d", name, len(args), len(fn.Params)))
+	}
+
+	for i, param := range fn.Params {
+		arg := args[i]
+		if arg.Type != param.Type {
+			p.langError(p.CurrentToken, fmt.Sprintf("cannot use %s(type %s) as type %s in argument '%s' to %s", arg.Type, arg.Type, param.Type, param.Name, name))
+		}
 	}
 
 	bodyLexer := &TokenSliceLexer{Tokens: fn.Body, Pos: 0}
@@ -772,16 +799,30 @@ func (p *Parser) callFuncExpr(name string) float64 {
 		Functions: p.Functions,
 	}
 	for i, param := range fn.Params {
-		subParser.Variables[param] = args[i]
+		subParser.Variables[param.Name] = args[i]
 	}
 	subParser.CurrentToken = bodyLexer.NextToken()
 
 	for subParser.CurrentToken.Type != TOKEN_EOF {
 		if subParser.CurrentToken.Type == TOKEN_RETURN_KEYWORD {
 			subParser.advanceParser()
-			return subParser.parseExpression()
+			result := subParser.parseExpression()
+
+			if fn.ReturnType != "" {
+				resultType := "float"
+				if result == float64(int(result)) {
+					resultType = "int"
+				}
+				if resultType != fn.ReturnType && !(fn.ReturnType == "float") {
+					p.langError(p.CurrentToken, fmt.Sprintf("cannot use %s(type %s) as type %s in return statement", resultType, resultType, fn.ReturnType))
+				}
+			}
+			return result
 		}
 		subParser.Parse()
+	}
+	if fn.ReturnType != "" {
+		p.langError(p.CurrentToken, fmt.Sprintf("missing return statement in function %s", fn.Name))
 	}
 	return 0
 }
@@ -790,12 +831,21 @@ func (p *Parser) parseArgValue() Value {
 	switch p.CurrentToken.Type {
 	case TOKEN_STRING:
 		return Value{Type: "string", Str: p.expect(TOKEN_STRING).Val}
+	case TOKEN_INT:
+		val, _ := strconv.Atoi(p.CurrentToken.Val)
+		p.advanceParser()
+		return Value{Type: "int", Int: val}
+	case TOKEN_FLOAT:
+		val, _ := strconv.ParseFloat(p.CurrentToken.Val, 64)
+		p.advanceParser()
+		return Value{Type: "float", Float: val}
 	case TOKEN_IDENT:
-		if val, ok := p.Variables[p.CurrentToken.Val]; ok && val.Type == "string" {
+		if val, ok := p.Variables[p.CurrentToken.Val]; ok { //&& val.Type == "string"
 			p.advanceParser()
 			return val
 		}
 		return Value{Type: "float", Float: p.parseExpression()}
+
 	default:
 		return Value{Type: "float", Float: p.parseExpression()}
 	}
