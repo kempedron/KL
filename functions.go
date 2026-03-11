@@ -116,14 +116,16 @@ func (p *Parser) callFuncExpr(name string) float64 {
 			subParser.advanceParser()
 			result := subParser.parseExpression()
 
-			if fn.ReturnType != "" {
-				resultType := "float"
-				if result == float64(int(result)) {
-					resultType = "int"
-				}
-				if resultType != fn.ReturnType && !(fn.ReturnType == "float") {
-					p.langError(p.CurrentToken, fmt.Sprintf("cannot use %s(type %s) as type %s in return statement", resultType, resultType, fn.ReturnType))
-				}
+			if fn.ReturnType == "int" {
+				return float64(int(result))
+			}
+
+			if fn.ReturnType == "float" {
+				return result
+			}
+
+			if fn.ReturnType == "string" {
+				p.langError(p.CurrentToken, "cannot return numeric value from string function")
 			}
 			return result
 		}

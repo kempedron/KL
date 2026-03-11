@@ -4,8 +4,7 @@ string age;
 
 input(age,"Enter your age:");
 
-int ageInt;
-ageInt = int(age);
+int ageInt = int(age);
 
 if (ageInt < 18) {
     print("go school");
@@ -14,3 +13,23 @@ if (ageInt < 18) {
 } else {
     print("go retire");
 }
+
+
+func sum(int a, int b) int {
+    return a + b;
+}
+
+func diff(int a, int b) int {
+    return a - b;
+}
+
+func divide(int a, int b) int {
+    return a / b;
+}
+
+float num = 1.0;
+int num1 = 2;
+
+printf("result sum: %d\n",sum(int(num),num1));
+printf("result diff: %d\n",diff(int(num),num1));
+printf("result divide: %d\n",divide(int(num),num1));

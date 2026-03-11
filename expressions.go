@@ -18,6 +18,12 @@ func (p *Parser) parseArgValue() Value {
 		val, _ := strconv.ParseFloat(p.CurrentToken.Val, 64)
 		p.advanceParser()
 		return Value{Type: "float", Float: val}
+	case TOKEN_INT_KEYWORD:
+		result := p.parsePrimary()
+		return Value{Type: "int", Int: int(result)}
+	case TOKEN_FLOAT_KEYWORD:
+		result := p.parsePrimary()
+		return Value{Type: "float", Float: result}
 	case TOKEN_IDENT:
 		if val, ok := p.Variables[p.CurrentToken.Val]; ok { //&& val.Type == "string"
 			p.advanceParser()
