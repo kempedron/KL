@@ -1,0 +1,10 @@
+1) input(varname, "text message");
+2) true - 1, false - 0
+3) && - logical AND
+4) || - logical OR
+5) == - equal
+6) != - not equal
+7) > - greater than
+8) < - less than
+9) >= - greater than or equal
+10) <= - less than or equal

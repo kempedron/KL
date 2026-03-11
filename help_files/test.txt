@@ -8,3 +8,14 @@ func sum(int a, int b) int {
 
 H("Hello, World!");
 print(sum(3,4),"\n");
+
+a = 12;
+b = "hi";
+
+print(a,"\n");
+print(b,"\n");
+
+
+string a;
+input(a,"text:");
+print("\n",a);

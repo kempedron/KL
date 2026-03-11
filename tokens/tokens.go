@@ -37,6 +37,17 @@ const (
 	TOKEN_RETURN_KEYWORD          //return
 	TOKEN_LBRACE                  // {
 	TOKEN_RBRACE                  // }
+	TOKEN_EQ                      // ==
+	TOKEN_NEQ                     // !=
+	TOKEN_AND                     // &&
+	TOKEN_OR                      // ||
+	TOKEN_GT                      // >
+	TOKEN_LT                      // <
+	TOKEN_GTE                     // >=
+	TOKEN_LTE                     // <=
+	TOKEN_IF_KEYWORD              // if
+	TOKEN_ELSE_KEYWORD            // else
+	TOKEN_ELIF_KEYWORD            // elif
 
 )
 
@@ -92,6 +103,28 @@ func (t TOKEN_TYPE) String() string {
 		return "'printf'"
 	case TOKEN_INPUT_KEYWORD:
 		return "'input'"
+	case TOKEN_EQ:
+		return "'=='"
+	case TOKEN_NEQ:
+		return "'!='"
+	case TOKEN_AND:
+		return "'&&'"
+	case TOKEN_OR:
+		return "'||'"
+	case TOKEN_GT:
+		return "'>'"
+	case TOKEN_LT:
+		return "'<'"
+	case TOKEN_GTE:
+		return "'>='"
+	case TOKEN_LTE:
+		return "'<='"
+	case TOKEN_IF_KEYWORD:
+		return "'if'"
+	case TOKEN_ELSE_KEYWORD:
+		return "'else'"
+	case TOKEN_ELIF_KEYWORD:
+		return "'elif'"
 	default:
 		return fmt.Sprintf("token(%d)", t)
 	}

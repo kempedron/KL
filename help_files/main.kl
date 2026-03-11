@@ -1,0 +1,16 @@
+int a = 10;
+
+string age;
+
+input(age,"Enter your age:");
+
+int ageInt;
+ageInt = int(age);
+
+if (ageInt < 18) {
+    print("go school");
+} elif (ageInt >= 18 && ageInt <= 65) {
+    print("go work");
+} else {
+    print("go retire");
+}
